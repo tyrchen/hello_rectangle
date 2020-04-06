@@ -5,39 +5,34 @@
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
 
-import 'package:hello_rectangle/unit.dart';
+import 'category.dart';
+import 'unit.dart';
 
 const _padding = EdgeInsets.all(16.0);
 
-/// Converter screen where users can input amounts to convert.
-///
-/// Currently, it just displays a list of mock units.
-///
-/// While it is named ConverterRoute, a more apt name would be ConverterScreen,
-/// because it is responsible for the UI at the route's destination.
-class ConverterRoute extends StatefulWidget {
-  /// Units for this [Category].
-  final List<Unit> units;
-  final Color color;
+/// [UnitConverter] where users can input amounts to convert in one [Unit]
+/// and retrieve the conversion in another [Unit] for a specific [Category].
+class UnitConverter extends StatefulWidget {
+  /// The current [Category] for unit conversion.
+  final Category category;
 
-  /// This [ConverterRoute] requires the color and units to not be null.
-  const ConverterRoute({
-    @required this.color,
-    @required this.units,
-  })  : assert(units != null),
-        assert(color != null);
+  /// This [UnitConverter] takes in a [Category] with [Units]. It can't be null.
+  const UnitConverter({
+    @required this.category,
+  }) : assert(category != null);
 
   @override
-  _ConverterRouteState createState() => _ConverterRouteState();
+  _UnitConverterState createState() => _UnitConverterState();
 }
 
-class _ConverterRouteState extends State<ConverterRoute> {
+class _UnitConverterState extends State<UnitConverter> {
   Unit _fromValue;
   Unit _toValue;
   double _inputValue;
   String _convertedValue = '';
   List<DropdownMenuItem> _unitMenuItems;
   bool _showValidationError = false;
+  final _inputKey = GlobalKey(debugLabel: 'inputText');
 
   @override
   void initState() {
@@ -46,14 +41,28 @@ class _ConverterRouteState extends State<ConverterRoute> {
     _setDefaults();
   }
 
+  @override
+  void didUpdateWidget(UnitConverter old) {
+    super.didUpdateWidget(old);
+    // We update our [DropdownMenuItem] units when we switch [Categories].
+    if (old.category != widget.category) {
+      _createDropdownMenuItems();
+      _setDefaults();
+    }
+  }
+
+  /// Creates fresh list of [DropdownMenuItem] widgets, given a list of [Unit]s.
   void _createDropdownMenuItems() {
     var newItems = <DropdownMenuItem>[];
-    for (var unit in widget.units) {
+    for (var unit in widget.category.units) {
       newItems.add(DropdownMenuItem(
         value: unit.name,
         child: Container(
-          child: Text(unit.name, softWrap: true)
-        )
+          child: Text(
+            unit.name,
+            softWrap: true,
+          ),
+        ),
       ));
     }
     setState(() {
@@ -61,13 +70,19 @@ class _ConverterRouteState extends State<ConverterRoute> {
     });
   }
 
+  /// Sets the default values for the 'from' and 'to' [Dropdown]s, and the
+  /// updated output value if a user had previously entered an input.
   void _setDefaults() {
     setState(() {
-      _fromValue = widget.units[0];
-      _toValue = widget.units[1];
+      _fromValue = widget.category.units[0];
+      _toValue = widget.category.units[1];
     });
+    if (_inputValue != null) {
+      _updateConversion();
+    }
   }
 
+  /// Clean up conversion; trim trailing zeros, e.g. 5.500 -> 5.5, 10.0 -> 10
   String _format(double conversion) {
     var outputNum = conversion.toStringAsPrecision(7);
     if (outputNum.contains('.') && outputNum.endsWith('0')) {
@@ -85,7 +100,8 @@ class _ConverterRouteState extends State<ConverterRoute> {
 
   void _updateConversion() {
     setState(() {
-      _convertedValue = _format(_inputValue * (_toValue.conversion / _fromValue.conversion));
+      _convertedValue =
+          _format(_inputValue * (_toValue.conversion / _fromValue.conversion));
     });
   }
 
@@ -94,12 +110,13 @@ class _ConverterRouteState extends State<ConverterRoute> {
       if (input == null || input.isEmpty) {
         _convertedValue = '';
       } else {
+        // Even though we are using the numerical keyboard, we still have to check
+        // for non-numerical input such as '5..0' or '6 -3'
         try {
           final inputDouble = double.parse(input);
           _showValidationError = false;
           _inputValue = inputDouble;
           _updateConversion();
-
         } on Exception catch (e) {
           print('Error: $e');
           _showValidationError = true;
@@ -109,7 +126,12 @@ class _ConverterRouteState extends State<ConverterRoute> {
   }
 
   Unit _getUnit(String unitName) {
-    return widget.units.firstWhere((Unit unit) => unit.name == unitName, orElse: null); 
+    return widget.category.units.firstWhere(
+      (Unit unit) {
+        return unit.name == unitName;
+      },
+      orElse: null,
+    );
   }
 
   void _updateFromConversion(dynamic unitName) {
@@ -134,12 +156,19 @@ class _ConverterRouteState extends State<ConverterRoute> {
     return Container(
       margin: EdgeInsets.only(top: 16.0),
       decoration: BoxDecoration(
+        // This sets the color of the [DropdownButton] itself
         color: Colors.grey[50],
-        border: Border.all(color: Colors.grey[400], width: 1.0),
+        border: Border.all(
+          color: Colors.grey[400],
+          width: 1.0,
+        ),
       ),
       padding: EdgeInsets.symmetric(vertical: 8.0),
       child: Theme(
-        data: Theme.of(context).copyWith(canvasColor: Colors.grey[50]),
+        // This sets the color of the [DropdownMenuItem]
+        data: Theme.of(context).copyWith(
+              canvasColor: Colors.grey[50],
+            ),
         child: DropdownButtonHideUnderline(
           child: ButtonTheme(
             alignedDropdown: true,
@@ -161,15 +190,23 @@ class _ConverterRouteState extends State<ConverterRoute> {
       padding: _padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
+        children: [
+          // This is the widget that accepts text input. In this case, it
+          // accepts numbers and calls the onChanged property on update.
+          // You can read more about it here: https://flutter.io/text-input
           TextField(
+            key: _inputKey,
             style: Theme.of(context).textTheme.headline4,
             decoration: InputDecoration(
               labelStyle: Theme.of(context).textTheme.headline4,
               errorText: _showValidationError ? 'Invalid number entered' : null,
               labelText: 'Input',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(0.0)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(0.0),
+              ),
             ),
+            // Since we only want numerical input, we use a number keyboard. There
+            // are also other keyboards for dates, emails, phone numbers, etc.
             keyboardType: TextInputType.number,
             onChanged: _updateInputValue,
           ),
@@ -180,35 +217,61 @@ class _ConverterRouteState extends State<ConverterRoute> {
 
     final arrows = RotatedBox(
       quarterTurns: 1,
-      child: Icon(Icons.compare_arrows, size: 40.0)
+      child: Icon(
+        Icons.compare_arrows,
+        size: 40.0,
+      ),
     );
+
     final output = Padding(
       padding: _padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
+        children: [
           InputDecorator(
-            child: Text(_convertedValue, style: Theme.of(context).textTheme.headline4),
+            child: Text(
+              _convertedValue,
+              style: Theme.of(context).textTheme.headline4,
+            ),
             decoration: InputDecoration(
               labelText: 'Output',
               labelStyle: Theme.of(context).textTheme.headline4,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(0.0)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(0.0),
+              ),
             ),
           ),
           _createDropdown(_toValue.name, _updateToConversion),
         ],
       ),
     );
-    
-    final converter = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+
+    final converter = ListView(
       children: [
         input,
         arrows,
-        output
+        output,
       ],
     );
 
-    return Padding(padding: _padding, child: converter);
+    // Based on the orientation of the parent widget, figure out how to best
+    // lay out our converter.
+    return Padding(
+      padding: _padding,
+      child: OrientationBuilder(
+        builder: (BuildContext context, Orientation orientation) {
+          if (orientation == Orientation.portrait) {
+            return converter;
+          } else {
+            return Center(
+              child: Container(
+                width: 450.0,
+                child: converter,
+              ),
+            );
+          }
+        },
+      ),
+    );
   }
 }
