@@ -1,9 +1,13 @@
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
 
-import 'package:hello_rectangle/category.dart';
+import 'category.dart';
 
 const double _kFlingVelocity = 2.0;
 
@@ -36,7 +40,7 @@ class _BackdropPanel extends StatelessWidget {
         children: <Widget>[
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate:  onVerticalDragUpdate,
+            onVerticalDragUpdate: onVerticalDragUpdate,
             onVerticalDragEnd: onVerticalDragEnd,
             onTap: onTap,
             child: Container(
@@ -49,8 +53,12 @@ class _BackdropPanel extends StatelessWidget {
               ),
             ),
           ),
-          Divider(height: 1.0),
-          Expanded(child: child),
+          Divider(
+            height: 1.0,
+          ),
+          Expanded(
+            child: child,
+          ),
         ],
       ),
     );
@@ -66,15 +74,17 @@ class _BackdropTitle extends AnimatedWidget {
     Listenable listenable,
     this.frontTitle,
     this.backTitle,
-  }): super(key: key, listenable: listenable);
+  }) : super(key: key, listenable: listenable);
 
   @override
   Widget build(BuildContext context) {
     final Animation<double> animation = this.listenable;
     return DefaultTextStyle(
-      style: Theme.of(context).primaryTextTheme.headline6,
+      style: Theme.of(context).primaryTextTheme.title,
       softWrap: false,
       overflow: TextOverflow.ellipsis,
+      // Here, we do a custom cross fade between backTitle and frontTitle.
+      // This makes a smooth animation between the two texts.
       child: Stack(
         children: <Widget>[
           Opacity(
@@ -82,12 +92,14 @@ class _BackdropTitle extends AnimatedWidget {
               parent: ReverseAnimation(animation),
               curve: Interval(0.5, 1.0),
             ).value,
+            child: backTitle,
           ),
           Opacity(
             opacity: CurvedAnimation(
               parent: animation,
               curve: Interval(0.5, 1.0),
             ).value,
+            child: frontTitle,
           ),
         ],
       ),
@@ -95,6 +107,12 @@ class _BackdropTitle extends AnimatedWidget {
   }
 }
 
+/// Builds a Backdrop.
+///
+/// A Backdrop widget has two panels, front and back. The front panel is shown
+/// by default, and slides down to show the back panel, from which a user
+/// can make a selection. The user can also configure the titles for when the
+/// front or back panel is showing.
 class Backdrop extends StatefulWidget {
   final Category currentCategory;
   final Widget frontPanel;
@@ -102,44 +120,48 @@ class Backdrop extends StatefulWidget {
   final Widget frontTitle;
   final Widget backTitle;
 
-  Backdrop({
+  const Backdrop({
     @required this.currentCategory,
     @required this.frontPanel,
     @required this.backPanel,
     @required this.frontTitle,
     @required this.backTitle,
-  }) : assert(currentCategory != null),
+  })  : assert(currentCategory != null),
         assert(frontPanel != null),
         assert(backPanel != null),
         assert(frontTitle != null),
         assert(backTitle != null);
 
-
   @override
   _BackdropState createState() => _BackdropState();
 }
 
-class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin {
-
+class _BackdropState extends State<Backdrop>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _backdropKey = GlobalKey(debugLabel: 'Backdrop');
   AnimationController _controller;
 
   @override
-  void initState() { 
+  void initState() {
     super.initState();
+    // This creates an [AnimationController] that can allows for animation for
+    // the BackdropPanel. 0.00 means that the front panel is in "tab" (hidden)
+    // mode, while 1.0 means that the front panel is open.
     _controller = AnimationController(
-      duration: Duration(microseconds: 300),
+      duration: Duration(milliseconds: 300),
       value: 1.0,
       vsync: this,
     );
   }
 
   @override
-  void didUpdateWidget (Backdrop old) {
+  void didUpdateWidget(Backdrop old) {
     super.didUpdateWidget(old);
     if (widget.currentCategory != old.currentCategory) {
       setState(() {
-        _controller.fling(velocity: _backdropPanelVisible ? -_kFlingVelocity : _kFlingVelocity);
+        _controller.fling(
+            velocity:
+                _backdropPanelVisible ? -_kFlingVelocity : _kFlingVelocity);
       });
     } else if (!_backdropPanelVisible) {
       setState(() {
@@ -156,7 +178,8 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
 
   bool get _backdropPanelVisible {
     final AnimationStatus status = _controller.status;
-    return status == AnimationStatus.completed || status == AnimationStatus.forward;
+    return status == AnimationStatus.completed ||
+        status == AnimationStatus.forward;
   }
 
   void _toggleBackdropPanelVisibility() {
@@ -169,6 +192,9 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
     final RenderBox renderBox = _backdropKey.currentContext.findRenderObject();
     return renderBox.size.height;
   }
+
+  // By design: the panel can only be opened with a swipe. To close the panel
+  // the user must either tap its heading or the backdrop's menu icon.
 
   void _handleDragUpdate(DragUpdateDetails details) {
     if (_controller.isAnimating ||
@@ -193,7 +219,7 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
               _controller.value < 0.5 ? -_kFlingVelocity : _kFlingVelocity);
   }
 
-Widget _buildStack(BuildContext context, BoxConstraints constraints) {
+  Widget _buildStack(BuildContext context, BoxConstraints constraints) {
     const double panelTitleHeight = 48.0;
     final Size panelSize = constraints.biggest;
     final double panelTop = panelSize.height - panelTitleHeight;
@@ -247,7 +273,6 @@ Widget _buildStack(BuildContext context, BoxConstraints constraints) {
       body: LayoutBuilder(
         builder: _buildStack,
       ),
-      resizeToAvoidBottomPadding: false,
     );
   }
 }
